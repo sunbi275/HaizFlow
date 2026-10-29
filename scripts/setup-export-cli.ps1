@@ -10,10 +10,12 @@ data. It changes no system settings and does not modify the installed app.
 #>
 param(
     [Parameter(Mandatory = $true)][string]$HaizflowHome,
-    [string]$Root = (Split-Path -Parent $PSScriptRoot)
+    [string]$Root = ""
 )
 
 $ErrorActionPreference = "Stop"
+# $PSScriptRoot is empty in parameter defaults on Windows PowerShell 5.1, so resolve it here.
+if (-not $Root) { $Root = Split-Path -Parent $PSScriptRoot }
 $lock = Join-Path $Root "requirements-lock-py313-win64.txt"
 $venv = Join-Path $Root ".venv"
 $venvPython = Join-Path $venv "Scripts\python.exe"
