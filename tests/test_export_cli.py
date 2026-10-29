@@ -56,3 +56,39 @@ def test_export_unrendered_video_returns_2(storage, capsys, monkeypatch):
     monkeypatch.setattr(export_cli, "current_render", lambda *a, **k: None)
     assert export_cli.main(["export", video.video_id, str(storage.external / "y.mp4")]) == 2
     assert "not rendered" in capsys.readouterr().err
+
+
+def test_render_runs_pipeline_then_exports(storage, monkeypatch, capsys):
+    from haizflow.pipeline import process_registry, process_video
+
+    _, video = storage.make_video(content=b"rendered")
+    calls = []
+    monkeypatch.setattr(video_store, "prepare_video_restart", lambda vid: calls.append("restart") or video)
+    monkeypatch.setattr(process_registry, "prepare_video_resume", lambda vid: calls.append("resume"))
+    monkeypatch.setattr(process_video, "process_video_sync", lambda vid: calls.append("process"))
+    out = storage.external / "rendered.mp4"
+    assert export_cli.main(["render", video.video_id, "--export", str(out)]) == 0
+    assert calls == ["restart", "resume", "process"]
+    assert out.read_bytes() == b"rendered"
+
+
+def test_render_reports_pipeline_failure(storage, monkeypatch, capsys):
+    from haizflow.pipeline import process_registry, process_video
+
+    _, video = storage.make_video(content=b"x")
+    monkeypatch.setattr(video_store, "prepare_video_restart", lambda vid: video)
+    monkeypatch.setattr(process_registry, "prepare_video_resume", lambda vid: None)
+
+    def boom(vid):
+        raise RuntimeError("missing resource pack")
+
+    monkeypatch.setattr(process_video, "process_video_sync", boom)
+    assert export_cli.main(["render", video.video_id]) == 1
+    assert "missing resource pack" in capsys.readouterr().err
+
+
+def test_render_rejects_manual_projects(storage, monkeypatch, capsys):
+    _, video = storage.make_video(content=b"x")
+    monkeypatch.setattr(video_store, "get_video", lambda vid: type("V", (), {"project_type": "manual", "video_id": vid})())
+    assert export_cli.main(["render", video.video_id]) == 1
+    assert "single and batch" in capsys.readouterr().err

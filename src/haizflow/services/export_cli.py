@@ -5,6 +5,12 @@ video must already be processed in HaizFlow before it can be exported here.
 
     python -m haizflow.services.export_cli list
     python -m haizflow.services.export_cli export VIDEO_ID DESTINATION [--overwrite]
+    python -m haizflow.services.export_cli render VIDEO_ID [--export DESTINATION] [--overwrite]
+
+`render` runs the same checkpointed pipeline the desktop app starts for a
+single or batch video, without the window. It needs the video's settings and
+the installed resource packs. It does not run while the app is processing
+the same video.
 
 Exit codes: 0 success, 1 error, 2 video not found or not rendered.
 """
@@ -59,6 +65,36 @@ def _export(video_id: str, destination: str, overwrite: bool) -> int:
     return 0
 
 
+def _render(video_id: str, export_to: str, overwrite: bool) -> int:
+    from haizflow.pipeline.process_registry import prepare_video_resume
+    from haizflow.pipeline.process_video import process_video_sync
+
+    video = video_store.get_video(video_id)
+    if video is None:
+        print(f"error: video not found: {video_id}", file=sys.stderr)
+        return 2
+    if video.project_type not in {"single", "batch"}:
+        print(f"error: render supports single and batch projects only: {video_id}", file=sys.stderr)
+        return 1
+    try:
+        if video_store.prepare_video_restart(video_id) is None:
+            print(f"error: could not prepare a fresh render for {video_id}", file=sys.stderr)
+            return 1
+        prepare_video_resume(video_id)
+        process_video_sync(video_id)
+    except Exception as exc:
+        print(f"error: render failed: {exc}", file=sys.stderr)
+        return 1
+    video = video_store.get_video(video_id)
+    if not video or not current_render(video):
+        print(f"error: render did not finish for {video_id}", file=sys.stderr)
+        return 1
+    print(f"rendered: {video_id}")
+    if export_to:
+        return _export(video_id, export_to, overwrite)
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="haizflow-export", description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -69,9 +105,15 @@ def main(argv: list[str] | None = None) -> int:
     export_parser.add_argument("video_id")
     export_parser.add_argument("destination", help="Output .mp4 path, or an existing folder")
     export_parser.add_argument("--overwrite", action="store_true")
+    render_parser = sub.add_parser("render", help="Render a single or batch video, then optionally export it")
+    render_parser.add_argument("video_id")
+    render_parser.add_argument("--export", dest="export_to", default="", help="Also export to this file or folder")
+    render_parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
     if args.command == "list":
         return _list(args.json)
+    if args.command == "render":
+        return _render(args.video_id, args.export_to, args.overwrite)
     return _export(args.video_id, args.destination, args.overwrite)
 
 
