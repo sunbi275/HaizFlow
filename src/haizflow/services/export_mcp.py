@@ -10,6 +10,7 @@ Set HAIZFLOW_HOME (and PYTHONPATH to the source's src folder) in the environment
 that launches the server, as in scripts/setup-export-cli.ps1.
 """
 
+import os
 import subprocess
 import sys
 
@@ -17,8 +18,12 @@ CLI = [sys.executable, "-m", "haizflow.services.export_cli"]
 
 
 def _run(args: list[str], timeout: int | None = None) -> dict:
+    # The server's own stdin/stdout carry the MCP protocol: the child must never inherit them.
+    environment = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
+    options = {"creationflags": subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, "CREATE_NO_WINDOW") else {}
     try:
-        completed = subprocess.run(CLI + args, capture_output=True, text=True, timeout=timeout, encoding="utf-8")
+        completed = subprocess.run(CLI + args, capture_output=True, text=True, timeout=timeout, encoding="utf-8",
+                                   errors="replace", stdin=subprocess.DEVNULL, env=environment, **options)
     except subprocess.TimeoutExpired:
         return {"ok": False, "exitCode": None, "error": "timed out; the render may still be running in HaizFlow"}
     return {

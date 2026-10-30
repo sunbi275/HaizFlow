@@ -24,6 +24,13 @@ from haizflow.services import video_store
 from haizflow.services.video_export import current_render, export_video, export_filename, project_display_name
 
 
+def _configure_output() -> None:
+    """Windows consoles and pipes default to a legacy code page that cannot print Vietnamese."""
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 def _list(as_json: bool) -> int:
     rows = []
     for video in video_store.list_videos():
@@ -110,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     render_parser.add_argument("--export", dest="export_to", default="", help="Also export to this file or folder")
     render_parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args(argv)
+    _configure_output()
     if args.command == "list":
         return _list(args.json)
     if args.command == "render":

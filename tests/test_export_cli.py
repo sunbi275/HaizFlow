@@ -92,3 +92,15 @@ def test_render_rejects_manual_projects(storage, monkeypatch, capsys):
     monkeypatch.setattr(video_store, "get_video", lambda vid: type("V", (), {"project_type": "manual", "video_id": vid})())
     assert export_cli.main(["render", video.video_id]) == 1
     assert "single and batch" in capsys.readouterr().err
+
+
+def test_output_is_utf8_on_a_legacy_code_page(monkeypatch):
+    import io
+    import sys
+
+    raw = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", io.TextIOWrapper(raw, encoding="cp1252"))
+    export_cli._configure_output()
+    print("Phim Việt Nam")
+    sys.stdout.flush()
+    assert raw.getvalue().decode("utf-8").strip() == "Phim Việt Nam"

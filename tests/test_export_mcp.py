@@ -59,3 +59,12 @@ def test_server_registers_three_tools():
     server = export_mcp.build_server()
     names = {tool.name for tool in server._tool_manager.list_tools()}
     assert names == {"list_videos", "export_video", "render_video"}
+
+
+def test_child_never_inherits_stdin_and_runs_in_utf8(monkeypatch):
+    calls = _capture(monkeypatch)
+    export_mcp.list_videos()
+    _, kwargs = calls[0]
+    assert kwargs["stdin"] == subprocess.DEVNULL
+    assert kwargs["env"]["PYTHONUTF8"] == "1"
+    assert kwargs["env"]["PYTHONIOENCODING"] == "utf-8"
