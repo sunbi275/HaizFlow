@@ -50,6 +50,8 @@ if (-not (Test-Path $venvPython)) {
 Write-Host "Installing locked dependencies (this can take a while)..."
 & $venvPython -m pip install --upgrade pip
 & $venvPython -m pip install --require-hashes -r $lock
+# The MCP server (haizflow.services.export_mcp) needs the MCP SDK, which the app lock does not include.
+& $venvPython -m pip install "mcp>=1.0,<2"
 
 # Only this process sees these; no permanent user or system environment change.
 $env:HAIZFLOW_HOME = $HaizflowHome
